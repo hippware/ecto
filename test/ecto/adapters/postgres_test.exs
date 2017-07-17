@@ -504,6 +504,22 @@ defmodule Ecto.Adapters.PostgresTest do
            ~s{INNER JOIN (SELECT p0."x" AS "x", p0."y" AS "z" FROM "posts" AS p0 WHERE (p0."title" = $1)) AS s1 ON TRUE}
   end
 
+  test "self join on subquery" do
+    subquery = Schema |> select([r], %{x: r.x, y: r.y})
+    query = subquery |> join(:inner, [c], p in subquery(subquery), true) |> normalize
+    assert SQL.all(query) ==
+           ~s{SELECT s0."x", s0."y" FROM "schema" AS s0 INNER JOIN } <>
+           ~s{(SELECT s0."x" AS "x", s0."y" AS "y" FROM "schema" AS s0) } <>
+           ~s{AS s1 ON TRUE}
+
+    subquery = Schema |> select([r], %{string: fragment("downcase(?)", ^"string")})
+    query = subquery |> join(:inner, [c], p in subquery(subquery), true) |> normalize
+    assert SQL.all(query) ==
+           ~s{SELECT downcase($1) FROM "schema" AS s0 INNER JOIN } <>
+           ~s{(SELECT downcase($2) AS "string" FROM "schema" AS s0) } <>
+           ~s{AS s1 ON TRUE}
+  end
+
   test "join with prefix" do
     query = Schema |> join(:inner, [p], q in Schema2, p.x == q.z) |> select([], true) |> normalize
     assert SQL.all(%{query | prefix: "prefix"}) ==
